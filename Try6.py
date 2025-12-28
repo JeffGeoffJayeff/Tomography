@@ -8,12 +8,12 @@ import math
 import matplotlib.pyplot as plt
 
 filename = "freddy.png"
-shortfile = "hurhur"
+shortfile = "thesmallfreddy"
 InputFolder = "Input/"
 OutputFolder = "Output/"
 WorkingFolder = "Workingdir/"
 
-ReconstructionWidth = 16 #Size of the reconstruction grid, just gonna do it as a square
+ReconstructionWidth = 32 #Size of the reconstruction grid, just gonna do it as a square
 Detectors = 21 #How many detectors are used
 Rotations =  np.arange(0,181,1) #[0,45,90,135] # In Degrees, angles start from the positive x-axis
 
@@ -107,23 +107,23 @@ class Ray:
     def rotationOrigin_y(self,new:float):
         self.rotationOrigin[1][0] = new
     
-
 class AMatrix:
     def __init__(self):
-        self.ReconstructionWidth = 3 #Reconstruction grid width
-        self.Detectors = Detectors #How many detectors 
-        self.Rotations = Rotations # Storing the rotation angles
-        self.APicture = Image.new("1",(self.ReconstructionWidth,self.ReconstructionWidth))
+        self.ReconstructionWidth:int = 3 #Reconstruction grid width
+        self.Detectors:int = Detectors #How many detectors 
+        self.Rotations:list[float] = Rotations # Storing the rotation angles
+        self.APicture:Image = Image.new("1",(self.ReconstructionWidth,self.ReconstructionWidth)) #Stores the picture that is used to make a row of A
         self.Rays: list[Ray]= [] # To store the ray objects that make up the detector
-        self.minx = 0 #These two are used for drawing the plot, may have other uses later, basically stores the min and max coordinates of the Rays before rotation
-        self.maxx = 0
-        self.center = [self.ReconstructionWidth/2,self.ReconstructionWidth/2]
+        self.minx:float = 0 #These two are used for drawing the plot, may have other uses later, basically stores the min and max coordinates of the Rays before rotation
+        self.maxx:float = 0
+        self.center:list[float] = [self.ReconstructionWidth/2-0.5,self.ReconstructionWidth/2-0.5] #This -0.5 is to align with the center of the pixel rather than the bottom left of a pixel
+        self.boundingBoxPoints = np.array([[0,0],[0,self.ReconstructionWidth],[self.ReconstructionWidth,self.ReconstructionWidth],[self.ReconstructionWidth,0]]) #The points that represent the four corners of the reconstruction grid, going clockwise from the bottom-left
     #Setting Methods, should probably use the property thing but this works    
     def SetReconstruction(self,NewWidth):
         if NewWidth > 0: 
             self.ReconstructionWidth = NewWidth
             self.APicture = Image.new("1",(self.ReconstructionWidth,self.ReconstructionWidth))
-            self.center = [self.ReconstructionWidth/2,self.ReconstructionWidth/2]
+            self.center = [self.ReconstructionWidth/2-.5,self.ReconstructionWidth/2-0.5]
         else:
             print("Reconstruction grid must be larger than 0")
     def SetDetectors(self,NewDetectors):
@@ -132,6 +132,11 @@ class AMatrix:
             print(f"Now using {self.Detectors} detectors")
         else:
             print("There must be more than 0 detectors")
+    def UpdateBoundingBox(self,newWidth):
+        self.boundingBoxPoints = np.array([[0,0],[0,newWidth],[newWidth,newWidth],[newWidth,0]])
+        self.boundingBoxPoints = self.boundingBoxPoints - self.ReconstructionWidth/2 #Translating the bounding box so its centered about the origin
+        self.boundingBoxPoints = self.boundingBoxPoints*math.sqrt(2) #Scaling the bounding box about the origin by square root 2
+        self.boundingBoxPoints = self.boundingBoxPoints + self.ReconstructionWidth/2 - 0.5 #-0.5 is to align the rays with the center of pixels better
     def SetOptimalDetectors(self):
         self.SetDetectors(math.ceil(self.ReconstructionWidth*math.sqrt(2)))
     def AppendRotation(self,AdditionalRotation):
@@ -139,14 +144,16 @@ class AMatrix:
     def AppendRotations(self,AdditionalRotations): #This is for adding multiple rotations
         self.Rotations.extend(AdditionalRotations)
     def CreateRays(self):
+        self.UpdateBoundingBox(self.ReconstructionWidth)
         rayGroupWidth = self.ReconstructionWidth*math.sqrt(2) #Multiplying by the square root two to get the diagonal width
-        raySpacing = rayGroupWidth/self.Detectors
-        xCoordinate = (self.ReconstructionWidth-rayGroupWidth)/2+0.5#self.ReconstructionWidth/2*(1-math.sqrt(2))# #Same for all rays
+        raySpacing = (self.boundingBox_TL[1]-self.boundingBox_BL[1])/(self.Detectors-1)#rayGroupWidth/(self.Detectors-1)
+        xCoordinate = self.boundingBox_BL[0]#(self.ReconstructionWidth-rayGroupWidth)/2+0.5#self.ReconstructionWidth/2*(1-math.sqrt(2))# #Same for all rays
         self.minx = xCoordinate
-        self.maxx = xCoordinate+raySpacing*self.Detectors
+        self.maxx = xCoordinate+raySpacing*(self.Detectors)
         for i in range(0,self.Detectors):
+            #debug statement print(f"i: {i} | xCoodrinate: {xCoordinate} | yCoordinate: {xCoordinate + raySpacing*i}")
             self.Rays.append(Ray(x_1=xCoordinate,y_1=xCoordinate+raySpacing*i,length=rayGroupWidth,rotationOrigin=self.center))
-        
+    
     # Making and moving Rays
     def DrawRay(self,rayNum):
         drawer = ImageDraw.Draw(self.APicture)
@@ -158,7 +165,7 @@ class AMatrix:
     def DrawRays(self):
         for i in range(0,len(self.Rays)):
             self.DrawRay(i)
-    def RotateRays(self,theta):
+    def RotateRaysTo(self,theta):
         for i in self.Rays:
             i.RotateTo(theta)
     # Image management
@@ -172,10 +179,11 @@ class AMatrix:
         self.AMatrix = np.zeros([self.Detectors*len(self.Rotations),(self.ReconstructionWidth)**2])
         self.CreateRays()
         for angleNum in range(0,len(self.Rotations)): #This is basically having PIL draw the lines that each ray will make, and then adding it as a row vector to its spot in the A matrix
-            self.RotateRays(self.Rotations[angleNum])
+            self.RotateRaysTo(self.Rotations[angleNum])
             for ray in range(0,self.Detectors):
                 self.ClearImage()
                 self.DrawRay(ray)
+                # Debug statement: self.APicture.save(f"Workingdir/AMatrixDrawings/Angle{angleNum:10d}Ray{ray:10d}.bmp")
                 self.AMatrix[angleNum*self.Detectors+ray] = np.asarray(self.APicture).reshape(-1)
         print(f"A Matrix created, with a size of {np.shape(self.AMatrix)}")
         self.AMatrix_Transpose = self.AMatrix.transpose() #Precomputing this
@@ -199,8 +207,21 @@ class AMatrix:
         print("R Matrix created")
     # Debugging
     def DebugCreateX(self): 
-        self.Rays.append(Ray(x_1=self.minx,x_2=self.maxx,y_1=self.minx,y_2=self.maxx,rotationOrigin=self.center))
-        self.Rays.append(Ray(x_1=self.minx,x_2=self.maxx,y_1=self.maxx,y_2=self.minx,rotationOrigin=self.center))
+        self.Rays.append(Ray(x_1=self.boundingBox_BL[0],x_2=self.boundingBox_TR[0],y_1=self.boundingBox_BL[1],y_2=self.boundingBox_TR[1],rotationOrigin=self.center))
+        self.Rays.append(Ray(x_1=self.boundingBox_TL[0],x_2=self.boundingBox_BR[0],y_1=self.boundingBox_TL[1],y_2=self.boundingBox_BR[1],rotationOrigin=self.center))
+    # Properties
+    @property
+    def boundingBox_BL(self): #Returns X-Y coordinates in list format for the bounding box points, this is bottom left
+        return self.boundingBoxPoints[0]
+    @property
+    def boundingBox_TL(self): #Top left
+        return self.boundingBoxPoints[1]
+    @property
+    def boundingBox_TR(self): #Top right
+        return self.boundingBoxPoints[2]
+    @property
+    def boundingBox_BR(self): #Botom Right
+        return self.boundingBoxPoints[3]
 class xMatrix: #This should be done after the AMatrix is made, manages everything related to the constructed xMatrix
     def __init__(self,Amatrix:AMatrix,ReconWidth:float=3):
         self.ReconstructionWidth = ReconWidth
@@ -286,6 +307,7 @@ def main():
         print(f"Loading {path}...")
         img = Image.open(path).resize([ReconstructionWidth,ReconstructionWidth]).save(WorkingFolder+"AsBMP.bmp")
         img = Image.open(WorkingFolder+"AsBMP.bmp")
+        img2 = Image.open(path)
         print(f"{path} loaded!")
     except IOError:
         print("File issues!!")
@@ -294,21 +316,21 @@ def main():
     print(f"x array made with shape {np.shape(xarray)}")
     thedog = AMatrix()
     thedog.SetReconstruction(ReconstructionWidth)
-    #thedog.SetOptimalDetectors()
+    thedog.SetOptimalDetectors()
     thedog.CreateRays()
-    thedog.DebugCreateX()
+    #thedog.DebugCreateX()
     thedog.DrawRays()
     fig, ax = plt.subplots()
-    for i in range(0,180):
+    for i in range(0,181):#Debug block
         ax.imshow(img)
         PlotAMatrix(thedog,ax)
-        thedog.RotateRays(i)
+        thedog.RotateRaysTo(i)
         ax.set_xlim([thedog.minx-5,thedog.maxx+5])
         ax.set_ylim([thedog.minx-5,thedog.maxx+5])  
         
         plt.savefig(f"Workingdir/Torture/{i}.png")
-        ax.cla()  
-    return
+        ax.cla()   
+    thedog.RotateRaysTo(0)
     thedog.CreateAMatrix() #These three functions should probably be linked into another function but whatever
     p = np.matmul(thedog.AMatrix,xarray)
     MakeSinogram(p,f"{OutputFolder}Sinograms/{shortfile}.bmp",np.size(Rotations),thedog.Detectors)
