@@ -7,30 +7,35 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-filename = "freddy.png"
-shortfile = "thesmallfreddy"
+filename = "Roots.png"
+shortfile = "RootsFan"
 InputFolder = "Input/"
 OutputFolder = "Output/"
 WorkingFolder = "Workingdir/"
 
 ReconstructionWidth = 32 #Size of the reconstruction grid, just gonna do it as a square
 Detectors = 21 #How many detectors are used
-Rotations =  np.arange(0,181,1) #[0,45,90,135] # In Degrees, angles start from the positive x-axis
+Rotations = [0,45,90,135] #np.arange(0,181,1) # # In Degrees, angles start from the positive x-axis
 
 
 
 class Ray:
-    def __init__(self,x_1:float=-1,y_1:float=-1,x_2:float=-1,y_2:float=-1,length:float=1,rotationOrigin:list=[0,0]): #Two modes to do this, either define length or define points
-        self.coords = np.array([[x_1,x_1+length],[y_1,y_1]])
+    def __init__(self,x_1:float=-1,y_1:float=-1,x_2:float=None,y_2:float=None,length:float=0,rotationOrigin:list=[0,0]): #Two modes to do this, either define length or define points
+        self.coords = np.array([[0,0],[0,0]])
+        if length != 0:
+            self.coords = np.array([[x_1,x_1+length],[y_1,y_1]]) #This layout is probably bad practice but whatever
+        else:
+            self.coords = np.array([[x_1,x_2],[y_1,y_2]])
+        if x_2 != None:
+            self.x_2 = x_2
+            self.CalculateLength()
+        if y_2 != None:
+            self.y_2 = y_2
+            self.CalculateLength()
         self.theta = 0 #How much the ray has been rotated from starting position
         self.length = length
         self.rotationOrigin = np.array([[rotationOrigin[0]],[rotationOrigin[1]]])
-        if x_2 != -1:
-            self.x_2 = x_2
-            self.CalculateLength()
-        if y_2 != -1:
-            self.y_2 = y_2
-            self.CalculateLength()
+            
         #Making the rotate command like this because it will make dealing with rotations easier later
     def RotateBy(self,theta:float=0): #Rotates the ray about the center of the reconstruction grid, which is irritatingly not at 0,0
         theta = math.radians(theta)
@@ -143,17 +148,33 @@ class AMatrix:
         self.Rotations.append(AdditionalRotation)
     def AppendRotations(self,AdditionalRotations): #This is for adding multiple rotations
         self.Rotations.extend(AdditionalRotations)
-    def CreateRays(self):
+    # Ray creation methods
+    def CreateParallelRays(self): #Makes the rays parallel
         self.UpdateBoundingBox(self.ReconstructionWidth)
         rayGroupWidth = self.ReconstructionWidth*math.sqrt(2) #Multiplying by the square root two to get the diagonal width
-        raySpacing = (self.boundingBox_TL[1]-self.boundingBox_BL[1])/(self.Detectors-1)#rayGroupWidth/(self.Detectors-1)
+        raySpacing = (self.boundingBox_TL[1]-self.boundingBox_BL[1])/(self.Detectors-1)#Lin space forumala
         xCoordinate = self.boundingBox_BL[0]#(self.ReconstructionWidth-rayGroupWidth)/2+0.5#self.ReconstructionWidth/2*(1-math.sqrt(2))# #Same for all rays
         self.minx = xCoordinate
         self.maxx = xCoordinate+raySpacing*(self.Detectors)
         for i in range(0,self.Detectors):
             #debug statement print(f"i: {i} | xCoodrinate: {xCoordinate} | yCoordinate: {xCoordinate + raySpacing*i}")
-            self.Rays.append(Ray(x_1=xCoordinate,y_1=xCoordinate+raySpacing*i,length=rayGroupWidth,rotationOrigin=self.center))
-    
+            self.Rays.append(Ray(x_1=xCoordinate,
+                                 y_1=xCoordinate+raySpacing*i,
+                                 length=rayGroupWidth,
+                                 rotationOrigin=self.center))
+    def CreateFanRays(self): #Makes the rays into a fan pattern
+        self.UpdateBoundingBox(self.ReconstructionWidth)
+        raySpacing = (self.boundingBox_TL[1]-self.boundingBox_BL[1])/(self.Detectors-1)
+        fanningPointY = self.center[1] # Y coordinate of the points where the rays fan from
+        fanningPointX = self.boundingBox_BR[0]
+        fanWallx = self.boundingBox_BL[0]
+        for i in range(0,self.Detectors):
+            ycoord = self.boundingBox_BL[1]+i*raySpacing
+            self.Rays.append(Ray(x_1=fanningPointX,
+                                 y_1=fanningPointY,
+                                 x_2=fanWallx,
+                                 y_2=ycoord,
+                                 rotationOrigin=self.center))
     # Making and moving Rays
     def DrawRay(self,rayNum):
         drawer = ImageDraw.Draw(self.APicture)
@@ -177,7 +198,7 @@ class AMatrix:
     # Make Matrices
     def CreateAMatrix(self): #Actually making the matrix :)
         self.AMatrix = np.zeros([self.Detectors*len(self.Rotations),(self.ReconstructionWidth)**2])
-        self.CreateRays()
+        self.CreateParallelRays()
         for angleNum in range(0,len(self.Rotations)): #This is basically having PIL draw the lines that each ray will make, and then adding it as a row vector to its spot in the A matrix
             self.RotateRaysTo(self.Rotations[angleNum])
             for ray in range(0,self.Detectors):
@@ -261,7 +282,7 @@ class xMatrix: #This should be done after the AMatrix is made, manages everythin
         self.xarray = np.abs(self.xarray) #If you don't do this then you get random white dots because when going from signed to unsigned the low negative values turn to 255
     def DoAllIterations(self): #Does all of iterations 
         for i in range(0,self.maxiteration):
-            print(f"Starting iteration {i} of {self.maxiteration}...",end='')
+            print(f"Starting iteration {i+1} of {self.maxiteration}...",end='')
             self.Iterate()
             print(f"iteration {i} calculated, saving image...",end='')
             self.SaveImage(WorkingFolder+f"{shortfile}Iteration{i}.bmp")
@@ -317,7 +338,8 @@ def main():
     thedog = AMatrix()
     thedog.SetReconstruction(ReconstructionWidth)
     thedog.SetOptimalDetectors()
-    thedog.CreateRays()
+    #thedog.CreateParallelRays()
+    thedog.CreateFanRays()
     #thedog.DebugCreateX()
     thedog.DrawRays()
     fig, ax = plt.subplots()
@@ -325,8 +347,8 @@ def main():
         ax.imshow(img)
         PlotAMatrix(thedog,ax)
         thedog.RotateRaysTo(i)
-        ax.set_xlim([thedog.minx-5,thedog.maxx+5])
-        ax.set_ylim([thedog.minx-5,thedog.maxx+5])  
+        ax.set_xlim([thedog.boundingBox_BL[0]-5,thedog.boundingBox_BR[0]+5])
+        ax.set_ylim([thedog.boundingBox_BL[1]-5,thedog.boundingBox_TL[1]+5])  
         
         plt.savefig(f"Workingdir/Torture/{i}.png")
         ax.cla()   
