@@ -7,15 +7,16 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-filename = "Roots.png"
-shortfile = "RootsFan"
+filename = "Steve2.png"
+shortfile = "SteveParallel"
 InputFolder = "Input/"
 OutputFolder = "Output/"
 WorkingFolder = "Workingdir/"
+plotmatlab = False
 
 ReconstructionWidth = 32 #Size of the reconstruction grid, just gonna do it as a square
 Detectors = 21 #How many detectors are used
-Rotations = [0,45,90,135] #np.arange(0,181,1) # # In Degrees, angles start from the positive x-axis
+Rotations = [0,22.5,45,67.5,90,112.5,135,157.5] #np.arange(0,181,1) # # In Degrees, angles start from the positive x-axis
 
 
 
@@ -214,7 +215,10 @@ class AMatrix:
         self.CMatrix = np.zeros([columns,columns]) #This needs to be a square
         for j in range(0,columns):
             denominator = np.sum(self.AMatrix[:,j])#Summing specific column
-            self.CMatrix[j,j] = 1/denominator
+            if denominator > 0:
+                self.CMatrix[j,j] = 1/denominator
+            else:
+                self.CMatrix[j,j] = 0
         print("C Matrix created")
     def CreateRMatrix(self):
         rows = np.shape(self.AMatrix)[0]
@@ -293,6 +297,7 @@ class xMatrix: #This should be done after the AMatrix is made, manages everythin
         print(f"Final image saved!")
     #Saving Stuff Section
     def SaveImage(self,filename): #Function to save the image and add it to frames to make a gif later
+        print(self.xarray)
         output = np.reshape(self.xarray.astype(np.int8),(self.ReconstructionWidth,self.ReconstructionWidth))
         max = np.max(output)
         if max > 0:
@@ -338,21 +343,22 @@ def main():
     thedog = AMatrix()
     thedog.SetReconstruction(ReconstructionWidth)
     thedog.SetOptimalDetectors()
-    #thedog.CreateParallelRays()
-    thedog.CreateFanRays()
+    thedog.CreateParallelRays()
+    #thedog.CreateFanRays()
     #thedog.DebugCreateX()
     thedog.DrawRays()
     fig, ax = plt.subplots()
-    for i in range(0,181):#Debug block
-        ax.imshow(img)
-        PlotAMatrix(thedog,ax)
-        thedog.RotateRaysTo(i)
-        ax.set_xlim([thedog.boundingBox_BL[0]-5,thedog.boundingBox_BR[0]+5])
-        ax.set_ylim([thedog.boundingBox_BL[1]-5,thedog.boundingBox_TL[1]+5])  
-        
-        plt.savefig(f"Workingdir/Torture/{i}.png")
-        ax.cla()   
-    thedog.RotateRaysTo(0)
+    if plotmatlab: #Change at top to enable or disable
+        for i in range(0,181):#Debug block
+            ax.imshow(img)
+            PlotAMatrix(thedog,ax)
+            thedog.RotateRaysTo(i)
+            ax.set_xlim([thedog.boundingBox_BL[0]-5,thedog.boundingBox_BR[0]+5])
+            ax.set_ylim([thedog.boundingBox_BL[1]-5,thedog.boundingBox_TL[1]+5])  
+            
+            plt.savefig(f"Workingdir/Torture/{i}.png")
+            ax.cla()   
+        thedog.RotateRaysTo(0)
     thedog.CreateAMatrix() #These three functions should probably be linked into another function but whatever
     p = np.matmul(thedog.AMatrix,xarray)
     MakeSinogram(p,f"{OutputFolder}Sinograms/{shortfile}.bmp",np.size(Rotations),thedog.Detectors)
