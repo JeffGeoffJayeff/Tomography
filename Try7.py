@@ -105,7 +105,7 @@ class Ray:
         self._coords = np.array([[0,0],[0,0]])
         self._point1:point = point1
         self._point2:point = point2
-        self._coords = np.array([[self._point1.x,self._point2.x],[self._point1.y,self._point2.y]])
+        self._coords = np.array([[self._point1.x,self._point2.x],[self._point1.y,self._point2.y]]) #Pay attention to this layout, did this to make rotation work
         self._theta = 0 #How much the ray has been rotated from starting position
         self._rotationOrigin:point = rotationOrigin
             
@@ -114,10 +114,9 @@ class Ray:
         theta = math.radians(theta)
         rotation_array = np.array([[math.cos(theta),-math.sin(theta)],[math.sin(theta),math.cos(theta)]])
         translation = np.array([[self._rotationOrigin.x],[self._rotationOrigin.y]])
-        self._coords = self._coords - translation #Translation, tried +=, didn't work, this is moving the ray to be centered around the origin so the rotation matrix rotates it as expected
-        self._coords = np.matmul(rotation_array,self._coords) #Rotation
-        self._coords = self._coords + translation #Translation
-        #TODO: Make this actually update point 1 and 2
+        self.coords = self.coords - translation #Translation, tried +=, didn't work, this is moving the ray to be centered around the origin so the rotation matrix rotates it as expected
+        self.coords = np.matmul(rotation_array,self.coords) #Rotation
+        self.coords = self.coords + translation #Translation
     def RotateTo(self,desiredtheta:float=0):
         deltatheta = desiredtheta - self._theta
         self.RotateBy(deltatheta)
@@ -149,6 +148,16 @@ class Ray:
     def rotationOrigin(self,newx:float=0,newy:float=0):
         self._rotationOrigin.x = newx
         self._rotationOrigin.y = newy
+    @property
+    def coords(self):
+        return np.array([[self._point1.x,self._point2.x],[self._point1.y,self._point2.y]])
+    @coords.setter
+    def coords(self,npArray):
+        self._point1.x = npArray[0][0]
+        self._point1.y = npArray[1][0]
+        self._point2.x = npArray[0][1]
+        self._point2.y = npArray[1][1]
+        self._coords = npArray
 
 class AMatrix:
     def __init__(self):
@@ -196,17 +205,15 @@ class AMatrix:
                                  point2=point(self.boundingBoxPoints.boundingBox_BR.x,ycoordinate),
                                  rotationOrigin=self.center))
     def CreateFanRays(self): #Makes the rays into a fan pattern
-        self.UpdateBoundingBox(self.ReconstructionWidth)
+        self.UpdateBoundingBox(self.ReconstructionWidth*3,self.ReconstructionWidth)
         raySpacing = (self.boundingBoxPoints.boundingBox_TL.y-self.boundingBoxPoints.boundingBox_BL.y)/(self.Detectors-1)
         fanningPointY = self.center.y # Y coordinate of the points where the rays fan from
         fanningPointX = self.boundingBoxPoints.boundingBox_BR.x
         fanWallx = self.boundingBoxPoints.boundingBox_BL.x
         for i in range(0,self.Detectors):
             ycoord = self.boundingBoxPoints.boundingBox_BL.y+i*raySpacing
-            self.Rays.append(Ray(x_1=fanningPointX,
-                                 y_1=fanningPointY,
-                                 x_2=fanWallx,
-                                 y_2=ycoord,
+            self.Rays.append(Ray(point(fanningPointX,fanningPointY,0),
+                                 point(fanWallx,ycoord,0),
                                  rotationOrigin=self.center))
     # Making and moving Rays
     def DrawRay(self,rayNum):
@@ -369,21 +376,30 @@ def main():
     thedog = AMatrix()
     thedog.SetReconstruction(ReconstructionWidth)
     thedog.SetOptimalDetectors()
-    thedog.CreateParallelRays()
-    #thedog.CreateFanRays()
+    #thedog.CreateParallelRays()
+    thedog.CreateFanRays()
     #thedog.DebugCreateX()
     thedog.DrawRays()
     fig, ax = plt.subplots()
     if plotmatlab: #Change at top to enable or disable
+        frames = []
         for i in range(0,181):#Debug block
             ax.imshow(img)
             PlotAMatrix(thedog,ax)
             thedog.RotateRaysTo(i)
-            ax.set_xlim([thedog.boundingBoxPoints.boundingBox_BL.x-5,thedog.boundingBoxPoints.boundingBox_BR.x+5])
-            ax.set_ylim([thedog.boundingBoxPoints.boundingBox_BL.y-5,thedog.boundingBoxPoints.boundingBox_TL.y+5])  
-            
+            if (thedog.boundingBoxPoints.boundingBox_BR.x-thedog.boundingBoxPoints.boundingBox_BL.x) > (thedog.boundingBoxPoints.boundingBox_TL.y-thedog.boundingBoxPoints.boundingBox_BL.y):
+                ax.set_xlim([thedog.boundingBoxPoints.boundingBox_BL.x-5,thedog.boundingBoxPoints.boundingBox_BR.x+5])
+                ax.set_ylim([thedog.boundingBoxPoints.boundingBox_BL.x-5,thedog.boundingBoxPoints.boundingBox_BR.x+5])  
+            else:
+                ax.set_xlim([thedog.boundingBoxPoints.boundingBox_BL.y-5,thedog.boundingBoxPoints.boundingBox_TL.y+5])
+                ax.set_ylim([thedog.boundingBoxPoints.boundingBox_BL.y-5,thedog.boundingBoxPoints.boundingBox_TL.y+5])
             plt.savefig(f"Workingdir/Torture/{i}.png")
+            gifFrame = Image.open(f"Workingdir/Torture/{i}.png")
+            frames.append(gifFrame)
             ax.cla()   
+        frames[0].save("Workingdir/Torture/Gif.gif",
+               save_all = True, append_images = frames[1:],
+               optimize = False, duration = 50,loop = 0)
         thedog.RotateRaysTo(0)
     thedog.CreateAMatrix() #These three functions should probably be linked into another function but whatever
     p = np.matmul(thedog.AMatrix,xarray)
