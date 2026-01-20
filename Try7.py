@@ -375,27 +375,27 @@ def main():
         pass
     xarray = np.asarray(img).reshape(-1) # Making x
     print(f"x array made with shape {np.shape(xarray)}")
-    thedog = AMatrix()
-    thedog.SetReconstruction(ReconstructionWidth)
-    thedog.SetOptimalDetectors()
-    #thedog.CreateParallelRays()
-    thedog.CreateFanRays()
-    #thedog.DebugCreateX()
-    thedog.DrawRays()
+    ScanningResult = AMatrix()
+    ScanningResult.SetReconstruction(ReconstructionWidth)
+    ScanningResult.SetOptimalDetectors()
+    #ScanningResult.CreateParallelRays()
+    ScanningResult.CreateFanRays()
+    #ScanningResult.DebugCreateX()
+    ScanningResult.DrawRays()
     fig, ax = plt.subplots()
     if plotmatlab: #Change at top to enable or disable
         frames = []
         img2 = Image.open(WorkingFolder+"Torture/inputimage.png")
         for i in range(0,181):#Debug block
             ax.imshow(img2)
-            PlotAMatrix(thedog,ax)
-            thedog.RotateRaysTo(i)
-            if (thedog.boundingBoxPoints.boundingBox_BR.x-thedog.boundingBoxPoints.boundingBox_BL.x) > (thedog.boundingBoxPoints.boundingBox_TL.y-thedog.boundingBoxPoints.boundingBox_BL.y):
-                ax.set_xlim([thedog.boundingBoxPoints.boundingBox_BL.x-5,thedog.boundingBoxPoints.boundingBox_BR.x+5])
-                ax.set_ylim([thedog.boundingBoxPoints.boundingBox_BL.x-5,thedog.boundingBoxPoints.boundingBox_BR.x+5])  
+            PlotAMatrix(ScanningResult,ax)
+            ScanningResult.RotateRaysTo(i)
+            if (ScanningResult.boundingBoxPoints.boundingBox_BR.x-ScanningResult.boundingBoxPoints.boundingBox_BL.x) > (ScanningResult.boundingBoxPoints.boundingBox_TL.y-ScanningResult.boundingBoxPoints.boundingBox_BL.y):
+                ax.set_xlim([ScanningResult.boundingBoxPoints.boundingBox_BL.x-5,ScanningResult.boundingBoxPoints.boundingBox_BR.x+5])
+                ax.set_ylim([ScanningResult.boundingBoxPoints.boundingBox_BL.x-5,ScanningResult.boundingBoxPoints.boundingBox_BR.x+5])  
             else:
-                ax.set_xlim([thedog.boundingBoxPoints.boundingBox_BL.y-5,thedog.boundingBoxPoints.boundingBox_TL.y+5])
-                ax.set_ylim([thedog.boundingBoxPoints.boundingBox_BL.y-5,thedog.boundingBoxPoints.boundingBox_TL.y+5])
+                ax.set_xlim([ScanningResult.boundingBoxPoints.boundingBox_BL.y-5,ScanningResult.boundingBoxPoints.boundingBox_TL.y+5])
+                ax.set_ylim([ScanningResult.boundingBoxPoints.boundingBox_BL.y-5,ScanningResult.boundingBoxPoints.boundingBox_TL.y+5])
             plt.savefig(f"Workingdir/Torture/{i}.png")
             gifFrame = Image.open(f"Workingdir/Torture/{i}.png")
             frames.append(gifFrame)
@@ -403,19 +403,19 @@ def main():
         frames[0].save("Workingdir/Torture/Gif.gif",
                save_all = True, append_images = frames[1:],
                optimize = False, duration = 50,loop = 0)
-        thedog.RotateRaysTo(0)
-    thedog.CreateAMatrix() #These three functions should probably be linked into another function but whatever
-    p = np.matmul(thedog.AMatrix,xarray)
-    MakeSinogram(p,f"{OutputFolder}Sinograms/{shortfile}.bmp",np.size(Rotations),thedog.Detectors)
-    thedog.CreateCMatrix()
-    thedog.CreateRMatrix()
-    #plt.bar(np.array(range(0,thedog.Detectors)),p[0:thedog.Detectors])
+        ScanningResult.RotateRaysTo(0)
+    ScanningResult.CreateAMatrix() #These three functions should probably be linked into another function but whatever
+    p = np.matmul(ScanningResult.AMatrix,xarray)
+    MakeSinogram(p,f"{OutputFolder}Sinograms/{shortfile}.bmp",np.size(Rotations),ScanningResult.Detectors)
+    ScanningResult.CreateCMatrix()
+    ScanningResult.CreateRMatrix()
+    #plt.bar(np.array(range(0,ScanningResult.Detectors)),p[0:ScanningResult.Detectors])
     #plt.show()
-    thecat = xMatrix(thedog,thedog.ReconstructionWidth)
-    thecat.ImportPVector(p)
-    thecat.SetIterations(100)
-    thecat.SetDetectors(thedog.Detectors)
-    thecat.DoAllIterations()
-    thecat.SaveGif(OutputFolder+f"{shortfile}.gif")
+    Reconstuctor = xMatrix(ScanningResult,ScanningResult.ReconstructionWidth)
+    Reconstuctor.ImportPVector(p)
+    Reconstuctor.SetIterations(100)
+    Reconstuctor.SetDetectors(ScanningResult.Detectors)
+    Reconstuctor.DoAllIterations()
+    Reconstuctor.SaveGif(OutputFolder+f"{shortfile}.gif")
     
 main()
