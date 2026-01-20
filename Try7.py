@@ -7,14 +7,14 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-filename = "Test.png"
-shortfile = "Math"
+filename = "freddy.png"
+shortfile = "ABSTestingFred"
 InputFolder = "Input/"
 OutputFolder = "Output/"
 WorkingFolder = "Workingdir/"
-plotmatlab = True
+plotmatlab = False #Set to True to create a gif of the scanning process 
 
-ReconstructionWidth = 16 #Size of the reconstruction grid, just gonna do it as a square
+ReconstructionWidth = 32 #Size of the reconstruction grid, just gonna do it as a square
 Detectors = 21 #How many detectors are used
 Rotations = np.arange(0,181,1) # [0,22.5,45,67.5,90,112.5,135,157.5] ## In Degrees, angles start from the positive x-axis
 
@@ -318,7 +318,8 @@ class xMatrix: #This should be done after the AMatrix is made, manages everythin
         #self.xarray = self.xarray + np.matmul((np.matmul(np.matmul(self.Amatrix.CMatrix,self.Amatrix.AMatrix_Transpose),self.Amatrix.RMatrix)),(p-np.matmul(self.Amatrix.AMatrix,self.xarray)))
         self.xarray = self.xarray + np.matmul(self.CAtransR,(self.Pmatrix-np.matmul(self.Amatrix.AMatrix,self.xarray)))
         # As a future improvement calculate the CAtRP and the CAtRA and then reuse it instead of recalculating it everytime
-        self.xarray = np.abs(self.xarray) #If you don't do this then you get random white dots because when going from signed to unsigned the low negative values turn to 255
+        #self.xarray = np.abs(self.xarray) #If you don't do this then you get random white dots because when going from signed to unsigned the low negative values turn to 255
+        #TODO: Evaluate if this should be here or in the image processing
     def DoAllIterations(self): #Does all of iterations 
         for i in range(0,self.maxiteration):
             print(f"Starting iteration {i+1} of {self.maxiteration}...",end='')
@@ -332,13 +333,13 @@ class xMatrix: #This should be done after the AMatrix is made, manages everythin
         print(f"Final image saved!")
     #Saving Stuff Section
     def SaveImage(self,filename): #Function to save the image and add it to frames to make a gif later
-        output = np.reshape(self.xarray.astype(np.int8),(self.ReconstructionWidth,self.ReconstructionWidth))
+        output = np.reshape(np.abs(self.xarray).astype(np.int8),(self.ReconstructionWidth,self.ReconstructionWidth))
         max = np.max(output)
         if max > 0:
-            scale = 255//max
+            scale = 255/max
         else:
             scale = 1
-        outputimage = Image.fromarray(output*scale,"L")
+        outputimage = Image.fromarray(np.floor(output*scale).astype(np.int8),"L")
         self.frames.append(outputimage)
         outputimage.save(filename)
     def SaveGif(self,filename=OutputFolder+f"{shortfile}.gif"):
@@ -353,7 +354,7 @@ def MakeSinogram(inputarray,filename,numberofrotations,detectors):
         scale = 255/max
     else:
         scale = 1
-    output = np.abs(np.reshape((inputarray*scale).astype(np.int8),(numberofrotations,detectors)))
+    output = np.abs(np.reshape((np.floor(inputarray*scale)).astype(np.int8),(numberofrotations,detectors)))
     outputimage = Image.fromarray(output,"L")
     outputimage.save(filename)
     
@@ -366,7 +367,7 @@ def main():
         path = "Input/"+filename
         print(f"Loading {path}...")
         img = Image.open(path).resize([ReconstructionWidth,ReconstructionWidth])
-        img.save(WorkingFolder+"Torture/inputimage.bmp")
+        img.save(WorkingFolder+"Torture/inputimage.png")
         img.convert("L").save(WorkingFolder+"AsBMP.bmp")
         print(f"{path} loaded!")
     except IOError:
@@ -384,7 +385,7 @@ def main():
     fig, ax = plt.subplots()
     if plotmatlab: #Change at top to enable or disable
         frames = []
-        img2 = Image.open(WorkingFolder+"Torture/inputimage.bmp")
+        img2 = Image.open(WorkingFolder+"Torture/inputimage.png")
         for i in range(0,181):#Debug block
             ax.imshow(img2)
             PlotAMatrix(thedog,ax)
