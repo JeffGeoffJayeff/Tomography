@@ -7,14 +7,14 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-filename = "Steve2.png"
-shortfile = "SteveParallel"
+filename = "Test.png"
+shortfile = "Math"
 InputFolder = "Input/"
 OutputFolder = "Output/"
 WorkingFolder = "Workingdir/"
 plotmatlab = True
 
-ReconstructionWidth = 32 #Size of the reconstruction grid, just gonna do it as a square
+ReconstructionWidth = 16 #Size of the reconstruction grid, just gonna do it as a square
 Detectors = 21 #How many detectors are used
 Rotations = np.arange(0,181,1) # [0,22.5,45,67.5,90,112.5,135,157.5] ## In Degrees, angles start from the positive x-axis
 
@@ -105,12 +105,12 @@ class Ray:
         self._coords = np.array([[0,0],[0,0]])
         self._point1:point = point1
         self._point2:point = point2
-        self._coords = np.array([[self._point1.x,self._point2.x],[self._point1.y,self._point2.y]]) #Pay attention to this layout, did this to make rotation work
+        self._coords = np.array([[self._point1.x,self._point2.x],[self._point1.y,self._point2.y]]) #Pay attention to this layout, did this to make rotation matrix work
         self._theta = 0 #How much the ray has been rotated from starting position
         self._rotationOrigin:point = rotationOrigin
             
         #Making the rotate command like this because it will make dealing with rotations easier later
-    def RotateBy(self,theta:float=0): #Rotates the ray about the center of the reconstruction grid, which is irritatingly not at 0,0
+    def RotateBy(self,theta:float=0): #Rotates By an angle in radians
         theta = math.radians(theta)
         rotation_array = np.array([[math.cos(theta),-math.sin(theta)],[math.sin(theta),math.cos(theta)]])
         translation = np.array([[self._rotationOrigin.x],[self._rotationOrigin.y]])
@@ -121,7 +121,7 @@ class Ray:
         deltatheta = desiredtheta - self._theta
         self.RotateBy(deltatheta)
         self._theta=desiredtheta
-    def SetTheta(self,theta:float=0): 
+    def SetTheta(self,theta:float=0): #Don't know if this is a good idea
         self._theta = theta
         
     @property
@@ -238,7 +238,8 @@ class AMatrix:
     # Make Matrices
     def CreateAMatrix(self): #Actually making the matrix :)
         self.AMatrix = np.zeros([self.Detectors*len(self.Rotations),(self.ReconstructionWidth)**2])
-        self.CreateParallelRays()
+        if len(self.Rays) == 0:
+            print("WARNING: Rays should be added to the AMatrix before running this function")
         for angleNum in range(0,len(self.Rotations)): #This is basically having PIL draw the lines that each ray will make, and then adding it as a row vector to its spot in the A matrix
             self.RotateRaysTo(self.Rotations[angleNum])
             for ray in range(0,self.Detectors):
@@ -271,15 +272,15 @@ class AMatrix:
         print("R Matrix created")
     # Debugging
     def DebugCreateX(self): 
-        self.Rays.append(Ray(x_1=self.boundingBoxPoints.boundingBox_BL.x,
-                             x_2=self.boundingBoxPoints.boundingBox_TR.x,
-                             y_1=self.boundingBoxPoints.boundingBox_BL.y,
-                             y_2=self.boundingBoxPoints.boundingBox_TR.y,
+        self.Rays.append(Ray(point1 = point(self.boundingBoxPoints.boundingBox_BL.x,
+                                            self.boundingBoxPoints.boundingBox_BL.y,0),
+                             point2 = point(self.boundingBoxPoints.boundingBox_TR.x,
+                                            self.boundingBoxPoints.boundingBox_TR.y,0),
                              rotationOrigin=self.center))
-        self.Rays.append(Ray(x_1=self.boundingBoxPoints.boundingBox_TL.x,
-                             x_2=self.boundingBoxPoints.boundingBox_BR.x,
-                             y_1=self.boundingBoxPoints.boundingBox_TL.y,
-                             y_2=self.boundingBoxPoints.boundingBox_BR.y,
+        self.Rays.append(Ray(point1 = point(self.boundingBoxPoints.boundingBox_TL.x,
+                                            self.boundingBoxPoints.boundingBox_TL.y,0),
+                             point2 = point(self.boundingBoxPoints.boundingBox_BR.x,
+                                            self.boundingBoxPoints.boundingBox_BR.y,0),
                              rotationOrigin=self.center))
 class xMatrix: #This should be done after the AMatrix is made, manages everything related to the constructed xMatrix
     def __init__(self,Amatrix:AMatrix,ReconWidth:float=3):
@@ -364,9 +365,9 @@ def main():
     try:
         path = "Input/"+filename
         print(f"Loading {path}...")
-        img = Image.open(path).resize([ReconstructionWidth,ReconstructionWidth]).save(WorkingFolder+"AsBMP.bmp")
-        img = Image.open(WorkingFolder+"AsBMP.bmp")
-        img2 = Image.open(path)
+        img = Image.open(path).resize([ReconstructionWidth,ReconstructionWidth])
+        img.save(WorkingFolder+"Torture/inputimage.bmp")
+        img.convert("L").save(WorkingFolder+"AsBMP.bmp")
         print(f"{path} loaded!")
     except IOError:
         print("File issues!!")
@@ -383,8 +384,9 @@ def main():
     fig, ax = plt.subplots()
     if plotmatlab: #Change at top to enable or disable
         frames = []
+        img2 = Image.open(WorkingFolder+"Torture/inputimage.bmp")
         for i in range(0,181):#Debug block
-            ax.imshow(img)
+            ax.imshow(img2)
             PlotAMatrix(thedog,ax)
             thedog.RotateRaysTo(i)
             if (thedog.boundingBoxPoints.boundingBox_BR.x-thedog.boundingBoxPoints.boundingBox_BL.x) > (thedog.boundingBoxPoints.boundingBox_TL.y-thedog.boundingBoxPoints.boundingBox_BL.y):
